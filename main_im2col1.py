@@ -263,11 +263,13 @@ class ConvLayer:
                                                      block_size=32 * self.n,
                                                      block_bumber=12 * self.numer_of_32_n_12_in_a_vec_blocks)
                     self.VecRAM.store_vec_blocks(vec_blocks)
-                    self.VecRegs.store_vec_regs(self.VecRAM.get_data())
+                    ##self.VecRegs.store_vec_regs(self.VecRAM.get_data())
                     # VecRegs.show()
                     number_of_12_in_one_blocks = math.ceil(len(vec_blocks[0]) / 12)
                     ## number_of_12_in_one_blocks is less than 8 when come to the last block
                     for j in range(number_of_12_in_one_blocks):
+                        ##for conv VecReg  save 12*9*32 each time (12*9*32*32 before,same size as vecSram)
+                        self.VecRegs.store_vec_regs(self.VecRAM.get_data())
                         for k in range(self.n):
                             CU_src2 = self.VecRegs.get_12_32_vec(j, k)
                             self.CUs.store_src2(CU_src2)
