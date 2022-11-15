@@ -102,21 +102,25 @@ class MatRAM:
             return 0
 class VecRAM:
     def __init__(self, args):
-    ##layout  (32*n)*96
+    ##layout  (32*n)*96 for spmm , (32*n)*(12*12) for conv
         self.data=[]
         self.args = args
     def store_vec_blocks(self, vec_blocks):
         for i in vec_blocks:
             self.data.append(i)
-        ###padding to the times of 32n
-        padding_row_size=math.ceil(len(vec_blocks)%(32*self.args['n']))*32*self.args['n']-len(vec_blocks)
+        ###padding to the times of 32n  may have problem
+        padding_row_size=math.ceil(len(vec_blocks)/(32*self.args['n']))*32*self.args['n']-len(vec_blocks)
+        # print('math.ceil(len(vec_blocks)')
+        # print(len(vec_blocks))
+        # print(math.ceil(len(vec_blocks)/(32*self.args['n'])))
         ### vec_blocks[0] is 96 except for the last cols
         if(padding_row_size>0):
             for i in range(padding_row_size):
                 self.data.append([0 for j in range(len(vec_blocks[0]))])
 
-    def get_data(self):
-        return self.data
+    def get_data(self,index_of_12_clos_in_one_block):
+        data=np.array(self.data)[:,index_of_12_clos_in_one_block*12:(index_of_12_clos_in_one_block+1)*12]
+        return data.tolist()
 
     def clear_vec_ram(self):
         self.data.clear()
@@ -125,6 +129,7 @@ class VecRAM:
 class VecRegs:
     def __init__(self, args):
         ### data layout 12*8*(32*n)
+        ### data layout change to 12*(32*n)
         self.cu_list=[[] for i in range(12)]
         self.args=args
     def store_vec_regs(self, vec_blocks):
@@ -133,24 +138,41 @@ class VecRegs:
         #  vec_blocks layout (32*n)*96
         ## need reshape from (32*n)*8  8*(32*n)
         ## most of the time block_numbers=96
+
+
+        ### change layout
+        #  vec_blocks layout (32*n)*12
+        ## need reshape from (32*n)  (32*n) in each reg
+        ## most of the time block_numbers=12
+
             block_numbers=len(vec_blocks[0])
+            # print('culist[%d]'%(i))
+            # print(vec_blocks[:, i:i + block_numbers:12].transpose().shape)
             self.cu_list[i] = vec_blocks[:, i:i + block_numbers:12].transpose().tolist()
-        max_12_in_blocks =0
+
+
+        ### the padding part is asme for conv and spmm,it can padding each cu into (1,288)
+        ##for conv max_lenth_in_12_regs  is 1 after change the VecReg size,but some reg length mat be less than 1 at last
+        max_lenth_in_12_regs =0
         for i in range(12):
-            if(len(self.cu_list[i])>max_12_in_blocks):
-                max_12_in_blocks=len(self.cu_list[i])
-        ## number_of_32_in_blocks is 96 except for the last block
-        number_of_32_in_blocks=len(vec_blocks)
+            if(len(self.cu_list[i])>max_lenth_in_12_regs):
+                max_lenth_in_12_regs=len(self.cu_list[i])
+        # ## number_of_val_in_one_reg is always 32*n because the padding is done in VecRam
+
+        number_of_vals_in_one_reg=len(vec_blocks)
 
         for i in range(12):
-            if(len(self.cu_list[i])<max_12_in_blocks):
-                for j in range((max_12_in_blocks-len(self.cu_list[i]))):
-                    self.cu_list[i].append([0 for k in range(number_of_32_in_blocks)])
+            if(len(self.cu_list[i])<max_lenth_in_12_regs):
+
+                for j in range((max_lenth_in_12_regs-len(self.cu_list[i]))):
+                    self.cu_list[i].append([0 for k in range(number_of_vals_in_one_reg)])
 
     def get_12_32_vec(self,j,k):
         temp=np.array(self.cu_list)
         ### reshape from (12,1,32) to (12,32)
-        return temp[:,j,k*32:(k+1)*32].reshape(12, 32).tolist()
+        # print('temp.shape')
+        # print(temp.shape)
+        return temp[:,0,k*32:(k+1)*32].reshape(12, 32).tolist()
     def clear_vec_reg(self):
         for i in range(len(self.cu_list)):
             self.cu_list[i].clear()
@@ -266,13 +288,13 @@ class ConvLayer:
                     ### delete if change is finished all
                     ##self.VecRegs.store_vec_regs(self.VecRAM.get_data())
                     # VecRegs.show()
-                    number_of_12_in_one_blocks = math.ceil(len(vec_blocks[0]) / 12)
-                    ## number_of_12_in_one_blocks is less than 8 when come to the last block
-                    for j in range(number_of_12_in_one_blocks):
+                    number_of_12_in_one_block = math.ceil(len(vec_blocks[0]) / 12)
+                    ## for spmm number_of_12_in_one_block is less than 8 when come to the last block,for conv is 12
+                    for j in range(number_of_12_in_one_block):
                         ##for conv VecReg  save 12*9*32 each time (12*9*32*32 before,same size as vecSram)
-                        self.VecRegs.store_vec_regs(self.VecRAM.get_data())
+                        self.VecRegs.store_vec_regs(self.VecRAM.get_data(j))
                         for k in range(self.n):
-                            CU_src2 = self.VecRegs.get_12_32_vec(j, k)
+                            CU_src2 = self.VecRegs.get_12_32_vec(j,k)
                             self.CUs.store_src2(CU_src2)
                             number_of_vals_in_one_block = self.MatRAM.get_number_of_vals_in_one_block(k)
                             ###Round Up and the last need padding
