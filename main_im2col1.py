@@ -263,6 +263,7 @@ class ConvLayer:
                                                      block_size=32 * self.n,
                                                      block_bumber=12 * self.numer_of_32_n_12_in_a_vec_blocks)
                     self.VecRAM.store_vec_blocks(vec_blocks)
+                    ### delete if change is finished all
                     ##self.VecRegs.store_vec_regs(self.VecRAM.get_data())
                     # VecRegs.show()
                     number_of_12_in_one_blocks = math.ceil(len(vec_blocks[0]) / 12)
