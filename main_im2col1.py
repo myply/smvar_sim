@@ -288,17 +288,19 @@ class ConvLayer:
                     ### delete if change is finished all
                     ##self.VecRegs.store_vec_regs(self.VecRAM.get_data())
                     # VecRegs.show()
-                    number_of_12_in_one_block = math.ceil(len(vec_blocks[0]) / 12)
-                    ## for spmm number_of_12_in_one_block is less than 8 when come to the last block,for conv is 12
-                    for j in range(number_of_12_in_one_block):
+                    number_of_12_cols_in_one_vec_block = math.ceil(len(vec_blocks[0]) / 12)
+                    # print('number_of_12_cols_in_one_vec_block',number_of_12_cols_in_one_vec_block)
+                    ## for spmm number_of_12_cols_in_one_vec_block is less than 8 when come to the last block,for conv is 12
+                    for j in range(number_of_12_cols_in_one_vec_block):
                         ##for conv VecReg  save 12*9*32 each time (12*9*32*32 before,same size as vecSram)
                         self.VecRegs.store_vec_regs(self.VecRAM.get_data(j))
                         for k in range(self.n):
                             CU_src2 = self.VecRegs.get_12_32_vec(j,k)
                             self.CUs.store_src2(CU_src2)
-                            number_of_vals_in_one_block = self.MatRAM.get_number_of_vals_in_one_block(k)
+                            number_of_vals_in_one_M32_mat_block = self.MatRAM.get_number_of_vals_in_one_block(k)
+                            # print('number_of_vals_in_one_M32_mat_block',number_of_vals_in_one_M32_mat_block)
                             ###Round Up and the last need padding
-                            for l in range(0, number_of_vals_in_one_block, 32):
+                            for l in range(0, number_of_vals_in_one_M32_mat_block, 32):
                                 CU_src1 = self.MatRAM.get_32_nozero_elements(addr=l, block_index=k)
                                 self.CUs.store_src1(CU_src1)
                                 self.CUs.CUs_compute(coladdr=h * 12 * self.numer_of_32_n_12_in_a_vec_blocks + j * 12)
