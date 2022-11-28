@@ -57,7 +57,7 @@ class DDR:
             for j in range(math.ceil(self.args['N']/32)):
                 print("number of vals in (%d,%d) M*32 mat1 block is %d"%(i,j,len(self.mat1sparse[i][j])))
     def get_mat1_blocks_by_group(self,group_number,index_of_block_count_by_by_row):
-        #mat1sparse layout is (N/32)*(M*32), each time a group of size n*(m*32) ,group_number is 0,1,
+        #mat1sparse layout is (N/32)*(M*32), each time a group of size n*(m*32) ,
         return self.mat1sparse[index_of_block_count_by_by_row][group_number*self.args['n']:(group_number+1)*self.args['n']]
     def get_mat2_blocks(self,addr,block_size,block_bumber):
         #each time 96 blocks, each block is 32n,
