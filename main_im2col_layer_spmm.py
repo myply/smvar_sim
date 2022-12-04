@@ -1,3 +1,4 @@
+import copy
 import csv
 
 filename = 'D:\\file\\pg\\xjw\\yolov5_excel\\excel\\yolov5s76.csv'
@@ -7,21 +8,77 @@ with open(filename) as csvfile:
     # header = next(csv_reader)        # 读取第一行每一列的标题
     for row in csv_reader:  # 将csv 文件中的数据保存到data中
         data.append(row)  # 选择某一列加入到data数组中
+print(len(data))
 for i,row in  enumerate(data):
     print(i+1,row)
     #### arrange the weight space
 output_resue_flag_table=[]
 for i,row in  enumerate(data):
-    output_resue_flag_table.append([])
     if(i==0):
-        break
-    elif(row[i].strip()[0:4]=='conv'):
+        continue
+    else:
+        output_resue_flag_table.append([])
+    if(i==0 or i==1):
+        continue
+    elif(row[0].strip()[0:4]=='conv'):
         if (len(row[0])>4):
-            output_resue_flag_table[int(row[0].strip()[5:-1])-2].append(i)
+            output_resue_flag_table[int(row[0].strip()[5:-1])-2].append(i-1)
         ## i'th layer output is used as input in (i+1)'th layer
         else:
-            output_resue_flag_table[i-1].append(i)
+            output_resue_flag_table[i-1-1].append(i-1)
+    elif(row[0].strip()[0:3]=='act'):
+        output_resue_flag_table[i-1-1].append(i-1)
+    elif (row[0].strip()[0:3] == 'add'):
+        output_resue_flag_table[int(row[0].split(' ')[1][4:])-2].append(i-1)
+        output_resue_flag_table[int(row[0].split(' ')[3][0:-1]) - 2].append(i-1)
+    elif (row[0].strip()[0:10] == 'upsampling'):
+        output_resue_flag_table[i -1- 1].append(i-1)
+    elif (row[0].strip()[0:7] == 'maxpool'):
+        output_resue_flag_table[i-1 - 1].append(i-1)
+    elif (row[0].strip()[0:5] == 'slice'):
+        output_resue_flag_table[i-1 - 1].append(i-1)
+    elif (row[0].strip()[0:3] == 'cat'):
+        print(row[0].strip())
+        if(row[0].strip().find('-')!=-1):
+            print(row[0].strip().split('-'))
+            output_resue_flag_table[int(row[0].strip().split('-')[0][4:]) - 2].append(i-1)
+            output_resue_flag_table[int(row[0].strip().split('-')[0][4:]) - 2+1].append(i-1)
+            output_resue_flag_table[int(row[0].strip().split('-')[0][4:]) - 2+2].append(i-1)
+            output_resue_flag_table[int(row[0].strip().split('-')[0][4:]) - 2+3].append(i-1)
+        else:
+            output_resue_flag_table[int(row[0].strip().split(' ')[0][4:]) - 2].append(i-1)
+            output_resue_flag_table[int(row[0].strip().split(' ')[2][0:-1]) - 2].append(i-1)
 
+print(len(output_resue_flag_table))
+for i in range(len(output_resue_flag_table)):
+        print(output_resue_flag_table[i])
+##represent each layer's output' need for storage when i'th layer is computed,a row represent a layer is computed
+output_store_requirement_table=[]
+for i in range(len(output_resue_flag_table)):
+    if i==0:
+        output_store_requirement_table.append([0 for j in range(len(output_resue_flag_table))])
+    else:
+        output_store_requirement_table.append(copy.deepcopy((output_store_requirement_table[i-1])))
+    output_store_requirement_table[i][i]=1
+    for j in range(0,i-1):
+        if(output_store_requirement_table[i][j]==1):
+            flag=0
+            ####this is leaf node
+            if(len(output_resue_flag_table[j])==0):
+                flag = 1
+            for k in output_resue_flag_table[j]:
+                if i<k:
+                    flag=1
+                    break
+            if(flag==0):
+                output_store_requirement_table[i][j] =0
+print("output_store_requirement_table")
+for i in range(len(output_store_requirement_table)):
+    sum=0
+    for j in range(len(output_store_requirement_table)):
+        sum+=output_store_requirement_table[i][j]
+    # print(i,output_store_requirement_table[i])
+    print(i, sum)
 # lines=[]
 # lines.append("import torch.nn as nn\n")
 # lines.append("import torch\n")
