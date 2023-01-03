@@ -2,7 +2,9 @@ import copy
 import csv
 class compiler_backend():
     csv_filename = 'D:\\file\\pg\\xjw\\yolov5_excel\\excel\\yolov5s76.csv'
-    csv_filename = 'yolov5s76.cpp'
+    cpp_filename = 'yolov5s76.cpp'
+    # csv_file_path='"D:\\\\file\\\\pg\\\\backup\\\\yolo\\\\yolov5\\\\csv\\\\conv\\\\'
+    csv_file_path = '"csv\\\\conv\\\\'
     weight_segment_start_addr = 65536 * 32 * 28
     #### computed after weight is stored
     bias_segment_start_addr=0
@@ -57,7 +59,8 @@ class compiler_backend():
             elif (row[0].strip()[0:10] == 'upsampling'):
                 self.output_resue_flag_table[i - 1 - 1].append(i - 1)
             elif (row[0].strip()[0:7] == 'maxpool'):
-                self.output_resue_flag_table[i - 1 - 1].append(i - 1)
+                # print('test:',row[0].strip()[8:-1])
+                self.output_resue_flag_table[int(row[0].strip()[8:-1])-2].append(i - 1)
             elif (row[0].strip()[0:5] == 'slice'):
                 self.output_resue_flag_table[i - 1 - 1].append(i - 1)
             elif (row[0].strip()[0:3] == 'cat'):
@@ -69,7 +72,10 @@ class compiler_backend():
                 else:
                     self.output_resue_flag_table[int(row[0].strip().split(' ')[0][4:]) - 2].append(i - 1)
                     self.output_resue_flag_table[int(row[0].strip().split(' ')[2][0:-1]) - 2].append(i - 1)
-
+        for i in range(len(self.output_resue_flag_table)):
+            ## this is a leaf node, save this layer's  output
+            if (len(self.output_resue_flag_table[i])==1):
+                self.output_resue_flag_table[i].append(len(self.output_resue_flag_table))
         # print(len(output_resue_flag_table))
         for i in range(len(self.output_resue_flag_table)):
             print(self.output_resue_flag_table[i])
@@ -106,6 +112,7 @@ class compiler_backend():
                 sum += self.output_store_requirement_table[i][j]
             if (sum > self.max_number_of_storage_blocks):
                 self.max_number_of_storage_blocks = sum
+        self.max_number_of_storage_blocks+=1
     def arrange_weight_addr(self):
         count = 0
         #### compute weight addr
@@ -150,20 +157,12 @@ class compiler_backend():
                 for j in range(self.max_number_of_storage_blocks):
                     #### find the src input stored in ddr
                     if (self.storage_used_flag[j] == layer_index_of_input_src):
-                        self.input_feature_addr_list.append(self.feature_addr_options_list[j])
+                        self.input_feature_addr_list.append([self.feature_addr_options_list[j]])
                         flag = True
                         break
                 if (not flag):
                     print("wrong!! couldn't find layer %d's input in ddr" % (i - 1))
 
-                ####free the space
-                for j in range(self.max_number_of_storage_blocks):
-                    if (self.storage_used_flag[j] == -1):
-                        if (self.first_input_resue_flag_table[0] == i - 1):
-                            self.storage_used_flag[j] = -2
-                    elif (self.storage_used_flag[j] != -2):
-                        if (self.output_resue_flag_table[self.storage_used_flag[j]][-1] == i - 1):
-                            self.storage_used_flag[j] = -2
 
                 ####malloc output  feature addr
                 flag = False
@@ -177,7 +176,14 @@ class compiler_backend():
                 if (not flag):
                     print("wrong!! couldn't find storage space for layer %d's output in ddr" % (i - 1))
 
-
+                ####free the space
+                for j in range(self.max_number_of_storage_blocks):
+                    if (self.storage_used_flag[j] == -1):
+                        if (self.first_input_resue_flag_table[0] == i - 1):
+                            self.storage_used_flag[j] = -2
+                    elif (self.storage_used_flag[j] != -2):
+                        if (self.output_resue_flag_table[self.storage_used_flag[j]][-1] == i - 1):
+                            self.storage_used_flag[j] = -2
 
             elif (row[0].strip()[0:3] == 'act'):
                 layer_index_of_input_src = i - 1 - 1
@@ -185,7 +191,7 @@ class compiler_backend():
                 for j in range(self.max_number_of_storage_blocks):
                     #### find the src input stored in ddr
                     if (self.storage_used_flag[j] == layer_index_of_input_src):
-                        self.input_feature_addr_list.append(self.feature_addr_options_list[j])
+                        self.input_feature_addr_list.append([self.feature_addr_options_list[j]])
                         self.output_feature_addr_list.append(self.feature_addr_options_list[j])
                         self.storage_used_flag[j] = i - 1
                         flag = True
@@ -205,34 +211,22 @@ class compiler_backend():
 
             elif (row[0].strip()[0:3] == 'add'):
                 ####find the input feature addr
-                layer_index_of_input_src1 = int(row[0].split(' ')[1][4:]) - 2
-                layer_index_of_input_src2 = int(row[0].split(' ')[3][0:-1]) - 2
+                layer_index_of_input_src_list = []
+                layer_index_of_input_src_list.append(int(row[0].split(' ')[1][4:]) - 2)
+                layer_index_of_input_src_list.append(int(row[0].split(' ')[3][0:-1]) - 2)
+                temp_input_addr_list=[]
                 flag = False
-                for j in range(self.max_number_of_storage_blocks):
-                    #### find the src input stored in ddr
-                    if (self.storage_used_flag[j] == layer_index_of_input_src1):
-                        self.input_feature_addr_list.append(self.feature_addr_options_list[j])
-                        flag = True
-                        break
+                for k in range(len(layer_index_of_input_src_list)):
+                    for j in range(self.max_number_of_storage_blocks):
+                        #### find the src input stored in ddr
+                        if (self.storage_used_flag[j] == layer_index_of_input_src_list[k]):
+                            temp_input_addr_list.append(self.feature_addr_options_list[j])
+                            flag = True
+                            break
                 if (not flag):
-                    print("wrong!! couldn't find layer %d's input src1 in ddr" % (i - 1))
-                flag = False
-                for j in range(self.max_number_of_storage_blocks):
-                    if (self.storage_used_flag[j] == layer_index_of_input_src2):
-                        self.input_feature_addr_list.append(self.feature_addr_options_list[j])
-                        flag = True
-                        break
-                if (not flag):
-                    print("wrong!! couldn't find layer %d's input src2 in ddr" % (i - 1))
-
-                ####free the space
-                for j in range(self.max_number_of_storage_blocks):
-                    if (self.storage_used_flag[j] == -1):
-                        if (self.first_input_resue_flag_table[0] == i - 1):
-                            self.storage_used_flag[j] = -2
-                    elif (self.storage_used_flag[j] != -2):
-                        if (self.output_resue_flag_table[self.storage_used_flag[j]][-1] == i - 1):
-                            self.storage_used_flag[j] = -2
+                    print("wrong!! couldn't find layer %d's input in ddr" % (i - 1))
+                else:
+                    self.input_feature_addr_list.append(temp_input_addr_list)
 
                 ####malloc output  feature addr
                 flag = False
@@ -245,6 +239,15 @@ class compiler_backend():
                         break
                 if (not flag):
                     print("wrong!! couldn't find storage space for layer %d's output in ddr" % (i - 1))
+
+                ####free the space
+                for j in range(self.max_number_of_storage_blocks):
+                    if (self.storage_used_flag[j] == -1):
+                        if (self.first_input_resue_flag_table[0] == i - 1):
+                            self.storage_used_flag[j] = -2
+                    elif (self.storage_used_flag[j] != -2):
+                        if (self.output_resue_flag_table[self.storage_used_flag[j]][-1] == i - 1):
+                            self.storage_used_flag[j] = -2
 
 
             elif (row[0].strip()[0:10] == 'upsampling'):
@@ -254,20 +257,11 @@ class compiler_backend():
                 for j in range(self.max_number_of_storage_blocks):
                     #### find the src input stored in ddr
                     if (self.storage_used_flag[j] == layer_index_of_input_src):
-                        self.input_feature_addr_list.append(self.feature_addr_options_list[j])
+                        self.input_feature_addr_list.append([self.feature_addr_options_list[j]])
                         flag = True
                         break
                 if (not flag):
                     print("wrong!! couldn't find layer %d's input in ddr" % (i - 1))
-
-                ####free the space
-                for j in range(self.max_number_of_storage_blocks):
-                    if (self.storage_used_flag[j] == -1):
-                        if (self.first_input_resue_flag_table[0] == i - 1):
-                            self.storage_used_flag[j] = -2
-                    elif (self.storage_used_flag[j] != -2):
-                        if (self.output_resue_flag_table[self.storage_used_flag[j]][-1] == i - 1):
-                            self.storage_used_flag[j] = -2
 
                 ####malloc output  feature addr
                 flag = False
@@ -281,26 +275,26 @@ class compiler_backend():
                 if (not flag):
                     print("wrong!! couldn't find storage space for layer %d's output in ddr" % (i - 1))
 
+                ####free the space
+                for j in range(self.max_number_of_storage_blocks):
+                    if (self.storage_used_flag[j] == -1):
+                        if (self.first_input_resue_flag_table[0] == i - 1):
+                            self.storage_used_flag[j] = -2
+                    elif (self.storage_used_flag[j] != -2):
+                        if (self.output_resue_flag_table[self.storage_used_flag[j]][-1] == i - 1):
+                            self.storage_used_flag[j] = -2
+
             elif (row[0].strip()[0:7] == 'maxpool'):
-                layer_index_of_input_src = i - 1 - 1
+                layer_index_of_input_src = int(row[0].strip()[8:-1])-2
                 flag = False
                 for j in range(self.max_number_of_storage_blocks):
                     #### find the src input stored in ddr
                     if (self.storage_used_flag[j] == layer_index_of_input_src):
-                        self.input_feature_addr_list.append(self.feature_addr_options_list[j])
+                        self.input_feature_addr_list.append([self.feature_addr_options_list[j]])
                         flag = True
                         break
                 if (not flag):
                     print("wrong!! couldn't find layer %d's input in ddr" % (i - 1))
-
-                ####free the space
-                for j in range(self.max_number_of_storage_blocks):
-                    if (self.storage_used_flag[j] == -1):
-                        if (self.first_input_resue_flag_table[0] == i - 1):
-                            self.storage_used_flag[j] = -2
-                    elif (self.storage_used_flag[j] != -2):
-                        if (self.output_resue_flag_table[self.storage_used_flag[j]][-1] == i - 1):
-                            self.storage_used_flag[j] = -2
 
                 ####malloc output  feature addr
                 flag = False
@@ -313,6 +307,15 @@ class compiler_backend():
                         break
                 if (not flag):
                     print("wrong!! couldn't find storage space for layer %d's output in ddr" % (i - 1))
+
+                ####free the space
+                for j in range(self.max_number_of_storage_blocks):
+                    if (self.storage_used_flag[j] == -1):
+                        if (self.first_input_resue_flag_table[0] == i - 1):
+                            self.storage_used_flag[j] = -2
+                    elif (self.storage_used_flag[j] != -2):
+                        if (self.output_resue_flag_table[self.storage_used_flag[j]][-1] == i - 1):
+                            self.storage_used_flag[j] = -2
 
 
             elif (row[0].strip()[0:5] == 'slice'):
@@ -321,20 +324,11 @@ class compiler_backend():
                 for j in range(self.max_number_of_storage_blocks):
                     #### find the src input stored in ddr
                     if (self.storage_used_flag[j] == layer_index_of_input_src):
-                        self.input_feature_addr_list.append(self.feature_addr_options_list[j])
+                        self.input_feature_addr_list.append([self.feature_addr_options_list[j]])
                         flag = True
                         break
                 if (not flag):
                     print("wrong!! couldn't find layer %d's input in ddr" % (i - 1))
-
-                ####free the space
-                for j in range(self.max_number_of_storage_blocks):
-                    if (self.storage_used_flag[j] == -1):
-                        if (self.first_input_resue_flag_table[0] == i - 1):
-                            self.storage_used_flag[j] = -2
-                    elif (self.storage_used_flag[j] != -2):
-                        if (self.output_resue_flag_table[self.storage_used_flag[j]][-1] == i - 1):
-                            self.storage_used_flag[j] = -2
 
                 ####malloc output  feature addr
                 flag = False
@@ -347,6 +341,15 @@ class compiler_backend():
                         break
                 if (not flag):
                     print("wrong!! couldn't find storage space for layer %d's output in ddr" % (i - 1))
+
+                ####free the space
+                for j in range(self.max_number_of_storage_blocks):
+                    if (self.storage_used_flag[j] == -1):
+                        if (self.first_input_resue_flag_table[0] == i - 1):
+                            self.storage_used_flag[j] = -2
+                    elif (self.storage_used_flag[j] != -2):
+                        if (self.output_resue_flag_table[self.storage_used_flag[j]][-1] == i - 1):
+                            self.storage_used_flag[j] = -2
 
             elif (row[0].strip()[0:3] == 'cat'):
                 layer_index_of_input_src_list = []
@@ -358,26 +361,19 @@ class compiler_backend():
                 else:
                     layer_index_of_input_src_list.append(int(row[0].strip().split(' ')[0][4:]) - 2)
                     layer_index_of_input_src_list.append(int(row[0].strip().split(' ')[2][0:-1]) - 2)
-
+                temp_input_addr_list=[]
                 flag = False
                 for k in range(len(layer_index_of_input_src_list)):
                     for j in range(self.max_number_of_storage_blocks):
                         #### find the src input stored in ddr
                         if (self.storage_used_flag[j] == layer_index_of_input_src_list[k]):
-                            self.input_feature_addr_list.append(self.feature_addr_options_list[j])
+                            temp_input_addr_list.append(self.feature_addr_options_list[j])
                             flag = True
                             break
                 if (not flag):
                     print("wrong!! couldn't find layer %d's input in ddr" % (i - 1))
-
-                ####free the space
-                for j in range(self.max_number_of_storage_blocks):
-                    if (self.storage_used_flag[j] == -1):
-                        if (self.first_input_resue_flag_table[0] == i - 1):
-                            self.storage_used_flag[j] = -2
-                    elif (self.storage_used_flag[j] != -2):
-                        if (self.output_resue_flag_table[self.storage_used_flag[j]][-1] == i - 1):
-                            self.storage_used_flag[j] = -2
+                else:
+                    self.input_feature_addr_list.append(temp_input_addr_list)
 
                 ####malloc output  feature addr
                 flag = False
@@ -390,8 +386,86 @@ class compiler_backend():
                         break
                 if (not flag):
                     print("wrong!! couldn't find storage space for layer %d's output in ddr" % (i - 1))
+
+                ####free the space
+                for j in range(self.max_number_of_storage_blocks):
+                    if (self.storage_used_flag[j] == -1):
+                        if (self.first_input_resue_flag_table[0] == i - 1):
+                            self.storage_used_flag[j] = -2
+                    elif (self.storage_used_flag[j] != -2):
+                        if (self.output_resue_flag_table[self.storage_used_flag[j]][-1] == i - 1):
+                            self.storage_used_flag[j] = -2
     def generate_code(self):
         lines=[]
+        print(len(self.input_feature_addr_list))
+        print(len(self.output_feature_addr_list))
+        print(len(self.weight_addr_list))
+        lines.append('store_fea_from_csv_2_ddr(ddr,'+self.csv_file_path+'input\\\\input0.csv",'+
+                     self.data[1][1]+','+self.data[1][3]+','+self.data[1][5]+','+str(self.input_feature_addr_list[0][0])+');\n')
+
+        conv_layer_index=0
+        for i, row in enumerate(self.data):
+            if (row[0].strip()[0:4] == 'conv'):
+                # csv_file_path='"D:\\\\file\\\\pg\\\\backup\\\\yolo\\\\yolov5\\\\csv\\\\conv\\\\'
+
+                lines.append('store_weight_from_csv_2_ddr(ddr,'+self.csv_file_path+'weight\\\\weight'
+                             +str(conv_layer_index)+'.csv",'+row[2]+','+row[1]+','+row[7]+','+str(self.weight_addr_list[conv_layer_index])+');\n')
+
+                lines.append('store_bias_from_csv_2_ddr(ddr,'+self.csv_file_path+'bias\\\\bias'
+                             +str(conv_layer_index)+'.csv",'+row[2]+','+str(self.bias_addr_list[conv_layer_index])+');\n')
+                conv_layer_index += 1
+
+        conv_layer_index = 0
+        for i, row in enumerate(self.data):
+            if (row[0].strip()[0:4] == 'conv'):
+                if(int(row[7])==3):
+                    lines.append('smvar_conv_code_nCi(ddr,'
+                             +str(self.input_feature_addr_list[i-1][0])+','+str(self.output_feature_addr_list[i-1])+','+str(self.weight_addr_list[conv_layer_index])
+                             +',MatSram0,MatSram1,VecSram0,VecSram1,VecRegs0,VecRegs1,SumSram,ResVSram,ResMSram,'
+                             +row[2]+','+row[1]+','+row[3]+','+row[5]+','+row[7]+','+row[9]+');\n')
+                else:
+                    lines.append('smvar_conv_k1_sim(ddr,'
+                             +str(self.input_feature_addr_list[i-1][0])+','+str(self.output_feature_addr_list[i-1])+','+str(self.weight_addr_list[conv_layer_index])
+                             +',MatSram0,MatSram1,VecSram0,VecSram1,VecRegs0,VecRegs1,SumSram,ResVSram,ResMSram,'
+                             +row[2]+','+row[1]+','+row[3]+','+row[5]+','+row[7]+','+row[9]+');\n')
+
+                lines.append('smvar_bias_sim(ddr,'+str(self.output_feature_addr_list[i-1])+','+str(self.bias_addr_list[conv_layer_index])+','
+                             +row[2]+','+row[4]+','+row[6]+');\n')
+                conv_layer_index+=1
+            elif (row[0].strip()[0:3]=='act'):
+                lines.append('smvar_act_code(ddr,'
+                             +str(self.input_feature_addr_list[i-1][0])+','+row[1]+','+row[3]+','+row[5]+');\n')
+            elif (row[0].strip()[0:3] == 'add'):
+                lines.append('smvar_add_code(ddr,'
+                             +str(self.input_feature_addr_list[i-1][0])+','+str(self.input_feature_addr_list[i-1][1])+','+str(self.output_feature_addr_list[i-1])
+                             +','+row[1]+','+row[3]+','+row[5]+');\n')
+            elif (row[0].strip()[0:10] == 'upsampling'):
+                lines.append('smvar_upsample_code(ddr,'
+                             +str(self.input_feature_addr_list[i-1][0])+','+str(self.output_feature_addr_list[i-1])
+                             +','+row[1]+','+row[3]+','+row[5]+');\n')
+            elif (row[0].strip()[0:7] == 'maxpool'):
+                lines.append('smvar_maxpool_code(ddr,'
+                             +str(self.input_feature_addr_list[i-1][0])+','+str(self.output_feature_addr_list[i-1])
+                             +','+row[1]+','+row[3]+','+row[5]+','+row[7]+','+row[8]+');\n')
+            elif (row[0].strip()[0:5] == 'slice'):
+                lines.append('smvar_slice_code(ddr,'
+                             +str(self.input_feature_addr_list[i-1][0])+','+str(self.output_feature_addr_list[i-1])
+                             +','+row[1]+','+row[3]+','+row[5]+');\n')
+            elif (row[0].strip()[0:3] == 'cat'):
+                if (row[0].strip().find('-') != -1):
+                    lines.append('smvar_cat4_code(ddr,'
+                             +str(self.input_feature_addr_list[i-1][0])+','+str(self.input_feature_addr_list[i-1][1])
+                        +','+str(self.input_feature_addr_list[i-1][2])+','+str(self.input_feature_addr_list[i-1][3])+','+str(self.output_feature_addr_list[i-1])
+                             +','+row[1]+','+row[3]+','+row[5]+');\n')
+                else:
+                    lines.append('smvar_cat_code(ddr,'
+                             +str(self.input_feature_addr_list[i-1][0])+','+str(self.input_feature_addr_list[i-1][1])+','+str(self.output_feature_addr_list[i-1])
+                             +','+row[1]+','+row[3]+','+row[5]+');\n')
+        file = open('yolov5s.cpp', 'w')
+        file.writelines(lines)
+        file.close()
+        # for i in range(len(self.input_feature_addr_list)):
+        #     print(self.input_feature_addr_list[i],self.output_feature_addr_list[i])
     def addr_compute(self):
         self.read_csv()
         self.count_layers_output_resue()
