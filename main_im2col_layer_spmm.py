@@ -1,15 +1,18 @@
 import copy
 import csv
+
+
 class compiler_backend():
-    csv_filename = 'D:\\file\\pg\\xjw\\yolov5_excel\\excel\\yolov5s76.csv'
-    cpp_filename = 'yolov5s76.cpp'
-    # csv_file_path='"D:\\\\file\\\\pg\\\\backup\\\\yolo\\\\yolov5\\\\csv\\\\conv\\\\'
-    csv_file_path = '"csv\\\\conv\\\\'
-    weight_segment_start_addr = 65536 * 32 * 28
+    csv_filename = 'D:\\file\\pg\\xjw\\yolov5_excel\\excel\\875_736_1312.csv'
+    cpp_filename = '875.cpp'
+    csv_file_path = '"D:\\\\file\\\\pg\\\\backup\\\\yolo\\\\yolov5\\\\csv\\\\conv\\\\'
+    # csv_file_path = '"csv\\\\conv\\\\'
+
+    weight_segment_start_addr = 65536 * 32 * 96
     #### computed after weight is stored
-    bias_segment_start_addr=0
-    feature_segment_start_addr = 65536 * 32 * 16 + 16384
-    max_feature_length = 1024 * 32 * 32
+    bias_segment_start_addr = 0
+    feature_segment_start_addr = 65536 * 32
+    max_feature_length = 80 * 480 * 640
     data = []
     ####tool list
     output_resue_flag_table = []
@@ -17,26 +20,29 @@ class compiler_backend():
     storage_used_flag = []
     feature_addr_options_list = []
 
-    max_number_of_storage_blocks=0
+    max_number_of_storage_blocks = 0
     first_input_resue_flag_table = [0]
 
-    weight_addr_list=[]
+    weight_addr_list = []
     bias_addr_list = []
     input_feature_addr_list = []
     output_feature_addr_list = []
+
     def __init__(self):
-        self.csv_filename = 'D:\\file\\pg\\xjw\\yolov5_excel\\excel\\yolov5s76.csv'
-        self.weight_segment_start_addr = 65536 * 32 * 28
-        self.feature_segment_start_addr = 65536 * 32 * 16 + 16384
-        self.max_feature_length = 1024 * 32 * 32
-        self.cpp_filename=''
+        self.csv_filename = 'D:\\file\\pg\\xjw\\yolov5_excel\\excel\\yolov5s.csv'
+        self.cpp_filename = 'yolov5s.cpp'
+        self.weight_segment_start_addr = 65536 * 32 * 96
+        self.feature_segment_start_addr = 65536 * 32
+        self.max_feature_length = 80 * 480 * 640
+
     def read_csv(self):
         with open(self.csv_filename) as csvfile:
             csv_reader = csv.reader(csvfile)  # 使用csv.reader读取csvfile中的文件
             # header = next(csv_reader)        # 读取第一行每一列的标题
             for row in csv_reader:  # 将csv 文件中的数据保存到data中
                 self.data.append(row)  # 选择某一列加入到data数组中
-        print("csv data:",len(self.data))
+        print("csv data:", len(self.data))
+
     def count_layers_output_resue(self):
         for i, row in enumerate(self.data):
             if (i == 0):
@@ -54,13 +60,17 @@ class compiler_backend():
             elif (row[0].strip()[0:3] == 'act'):
                 self.output_resue_flag_table[i - 1 - 1].append(i - 1)
             elif (row[0].strip()[0:3] == 'add'):
-                self.output_resue_flag_table[int(row[0].split(' ')[1][4:]) - 2].append(i - 1)
-                self.output_resue_flag_table[int(row[0].split(' ')[3][0:-1]) - 2].append(i - 1)
+                row_splite = []
+                for j in row[0].strip().split(' '):
+                    if j != '':
+                        row_splite.append(j)
+                self.output_resue_flag_table[int(row_splite[0][4:]) - 2].append(i - 1)
+                self.output_resue_flag_table[int(row_splite[1][0:-1]) - 2].append(i - 1)
             elif (row[0].strip()[0:10] == 'upsampling'):
                 self.output_resue_flag_table[i - 1 - 1].append(i - 1)
             elif (row[0].strip()[0:7] == 'maxpool'):
                 # print('test:',row[0].strip()[8:-1])
-                self.output_resue_flag_table[int(row[0].strip()[8:-1])-2].append(i - 1)
+                self.output_resue_flag_table[int(row[0].strip()[8:-1]) - 2].append(i - 1)
             elif (row[0].strip()[0:5] == 'slice'):
                 self.output_resue_flag_table[i - 1 - 1].append(i - 1)
             elif (row[0].strip()[0:3] == 'cat'):
@@ -70,15 +80,20 @@ class compiler_backend():
                     self.output_resue_flag_table[int(row[0].strip().split('-')[0][4:]) - 2 + 2].append(i - 1)
                     self.output_resue_flag_table[int(row[0].strip().split('-')[0][4:]) - 2 + 3].append(i - 1)
                 else:
-                    self.output_resue_flag_table[int(row[0].strip().split(' ')[0][4:]) - 2].append(i - 1)
-                    self.output_resue_flag_table[int(row[0].strip().split(' ')[2][0:-1]) - 2].append(i - 1)
+                    row_splite = []
+                    for j in row[0].strip().split(' '):
+                        if j != '':
+                            row_splite.append(j)
+                    self.output_resue_flag_table[int(row_splite[0][4:]) - 2].append(i - 1)
+                    self.output_resue_flag_table[int(row_splite[1][0:-1]) - 2].append(i - 1)
         for i in range(len(self.output_resue_flag_table)):
             ## this is a leaf node, save this layer's  output
-            if (len(self.output_resue_flag_table[i])==1):
+            if (len(self.output_resue_flag_table[i]) == 1):
                 self.output_resue_flag_table[i].append(len(self.output_resue_flag_table))
         # print(len(output_resue_flag_table))
         for i in range(len(self.output_resue_flag_table)):
             print(self.output_resue_flag_table[i])
+
     def count_layers_storage_requirement_table(self):
         for i in range(len(self.output_resue_flag_table)):
             if i == 0:
@@ -112,7 +127,10 @@ class compiler_backend():
                 sum += self.output_store_requirement_table[i][j]
             if (sum > self.max_number_of_storage_blocks):
                 self.max_number_of_storage_blocks = sum
-        self.max_number_of_storage_blocks+=1
+        self.max_number_of_storage_blocks += 1
+        print("max_number_of_storage_blocks")
+        print(self.max_number_of_storage_blocks)
+
     def arrange_weight_addr(self):
         count = 0
         #### compute weight addr
@@ -120,10 +138,14 @@ class compiler_backend():
         for i, row in enumerate(self.data):
             if (row[0].strip()[0:4] == 'conv'):
                 self.weight_addr_list.append(temp_addr)
+                Co_pad=int(row[2])
+                if(int(row[2])%32!=0):
+                    Co_pad = int(int(int(row[2])/32)+1)*32
                 # print(row, int(row[1]) * int(row[2]) * int(row[7]) * int(row[7]),count, temp_addr)
-                temp_addr = temp_addr + int(row[1]) * int(row[2]) * int(row[7]) * int(row[7])
+                temp_addr = temp_addr + int(row[1]) * Co_pad* int(row[7]) * int(row[7])
                 count += 1
-        self.bias_segment_start_addr=temp_addr
+        self.bias_segment_start_addr = temp_addr
+
     def arrange_bias_addr(self):
         #### compute bias addr
         count = 0
@@ -131,10 +153,14 @@ class compiler_backend():
         for i, row in enumerate(self.data):
             if (row[0].strip()[0:4] == 'conv'):
                 self.bias_addr_list.append(temp_addr)
+                Co_pad=int(row[2])
+                if(int(row[2])%32!=0):
+                    Co_pad = int(int(int(row[2])/32)+1)*32
                 # print(int(row[2]), count,temp_addr)
-                temp_addr = temp_addr + int(row[2])
+                temp_addr = temp_addr + Co_pad
                 count += 1
         # print(len(bias_segment_start_addr))
+
     def arrange_feature_addr(self):
         #### compute bias addr
         self.storage_used_flag = [-2 for i in range(self.max_number_of_storage_blocks)]
@@ -162,7 +188,6 @@ class compiler_backend():
                         break
                 if (not flag):
                     print("wrong!! couldn't find layer %d's input in ddr" % (i - 1))
-
 
                 ####malloc output  feature addr
                 flag = False
@@ -212,9 +237,13 @@ class compiler_backend():
             elif (row[0].strip()[0:3] == 'add'):
                 ####find the input feature addr
                 layer_index_of_input_src_list = []
-                layer_index_of_input_src_list.append(int(row[0].split(' ')[1][4:]) - 2)
-                layer_index_of_input_src_list.append(int(row[0].split(' ')[3][0:-1]) - 2)
-                temp_input_addr_list=[]
+                row_splite = []
+                for j in row[0].strip().split(' '):
+                    if j != '':
+                        row_splite.append(j)
+                layer_index_of_input_src_list.append(int(row_splite[0][4:]) - 2)
+                layer_index_of_input_src_list.append(int(row_splite[1][0:-1]) - 2)
+                temp_input_addr_list = []
                 flag = False
                 for k in range(len(layer_index_of_input_src_list)):
                     for j in range(self.max_number_of_storage_blocks):
@@ -285,7 +314,7 @@ class compiler_backend():
                             self.storage_used_flag[j] = -2
 
             elif (row[0].strip()[0:7] == 'maxpool'):
-                layer_index_of_input_src = int(row[0].strip()[8:-1])-2
+                layer_index_of_input_src = int(row[0].strip()[8:-1]) - 2
                 flag = False
                 for j in range(self.max_number_of_storage_blocks):
                     #### find the src input stored in ddr
@@ -351,7 +380,7 @@ class compiler_backend():
                         if (self.output_resue_flag_table[self.storage_used_flag[j]][-1] == i - 1):
                             self.storage_used_flag[j] = -2
 
-            elif (row[0].strip()[0:3] == 'cat'):
+            elif (row[0].strip()[0: 3] == 'cat'):
                 layer_index_of_input_src_list = []
                 if (row[0].strip().find('-') != -1):
                     layer_index_of_input_src_list.append(int(row[0].strip().split('-')[0][4:]) - 2)
@@ -359,9 +388,13 @@ class compiler_backend():
                     layer_index_of_input_src_list.append(int(row[0].strip().split('-')[0][4:]) - 2 + 2)
                     layer_index_of_input_src_list.append(int(row[0].strip().split('-')[0][4:]) - 2 + 3)
                 else:
-                    layer_index_of_input_src_list.append(int(row[0].strip().split(' ')[0][4:]) - 2)
-                    layer_index_of_input_src_list.append(int(row[0].strip().split(' ')[2][0:-1]) - 2)
-                temp_input_addr_list=[]
+                    row_splite = []
+                    for j in row[0].strip().split(' '):
+                        if j != '':
+                            row_splite.append(j)
+                    layer_index_of_input_src_list.append(int(row_splite[0][4:]) - 2)
+                    layer_index_of_input_src_list.append(int(row_splite[1][0:-1]) - 2)
+                temp_input_addr_list = []
                 flag = False
                 for k in range(len(layer_index_of_input_src_list)):
                     for j in range(self.max_number_of_storage_blocks):
@@ -395,77 +428,92 @@ class compiler_backend():
                     elif (self.storage_used_flag[j] != -2):
                         if (self.output_resue_flag_table[self.storage_used_flag[j]][-1] == i - 1):
                             self.storage_used_flag[j] = -2
+
     def generate_code(self):
-        lines=[]
+        lines = []
         print(len(self.input_feature_addr_list))
         print(len(self.output_feature_addr_list))
         print(len(self.weight_addr_list))
-        lines.append('store_fea_from_csv_2_ddr(ddr,'+self.csv_file_path+'input\\\\input0.csv",'+
-                     self.data[1][1]+','+self.data[1][3]+','+self.data[1][5]+','+str(self.input_feature_addr_list[0][0])+');\n')
+        lines.append('store_fea_from_csv_2_ddr(ddr,' + self.csv_file_path + 'input\\\\input.csv",' +
+                     self.data[1][1] + ',' + self.data[1][3] + ',' + self.data[1][5] + ',' + str(
+            self.input_feature_addr_list[0][0]) + ');\n')
 
-        conv_layer_index=0
+        conv_layer_index = 0
         for i, row in enumerate(self.data):
             if (row[0].strip()[0:4] == 'conv'):
                 # csv_file_path='"D:\\\\file\\\\pg\\\\backup\\\\yolo\\\\yolov5\\\\csv\\\\conv\\\\'
+                Co_pad=int(row[2])
+                if(int(row[2])%32!=0):
+                    Co_pad = int(int(int(row[2])/32)+1)*32
+                lines.append('store_weight_from_csv_2_ddr(ddr,' + self.csv_file_path + 'weight\\\\weight'
+                             + str(conv_layer_index) + '.csv",' + str(Co_pad) + ',' + row[1] + ',' + row[7] + ',' + str(
+                    self.weight_addr_list[conv_layer_index]) + ');\n')
 
-                lines.append('store_weight_from_csv_2_ddr(ddr,'+self.csv_file_path+'weight\\\\weight'
-                             +str(conv_layer_index)+'.csv",'+row[2]+','+row[1]+','+row[7]+','+str(self.weight_addr_list[conv_layer_index])+');\n')
-
-                lines.append('store_bias_from_csv_2_ddr(ddr,'+self.csv_file_path+'bias\\\\bias'
-                             +str(conv_layer_index)+'.csv",'+row[2]+','+str(self.bias_addr_list[conv_layer_index])+');\n')
+                lines.append('store_bias_from_csv_2_ddr(ddr,' + self.csv_file_path + 'bias\\\\bias'
+                             + str(conv_layer_index) + '.csv",' + str(Co_pad) + ',' + str(
+                    self.bias_addr_list[conv_layer_index]) + ');\n')
                 conv_layer_index += 1
 
         conv_layer_index = 0
         for i, row in enumerate(self.data):
             if (row[0].strip()[0:4] == 'conv'):
-                if(int(row[7])==3):
-                    lines.append('smvar_conv_code_nCi(ddr,'
-                             +str(self.input_feature_addr_list[i-1][0])+','+str(self.output_feature_addr_list[i-1])+','+str(self.weight_addr_list[conv_layer_index])
-                             +',MatSram0,MatSram1,VecSram0,VecSram1,VecRegs0,VecRegs1,SumSram,ResVSram,ResMSram,'
-                             +row[2]+','+row[1]+','+row[3]+','+row[5]+','+row[7]+','+row[9]+');\n')
-                else:
-                    lines.append('smvar_conv_k1_sim(ddr,'
-                             +str(self.input_feature_addr_list[i-1][0])+','+str(self.output_feature_addr_list[i-1])+','+str(self.weight_addr_list[conv_layer_index])
-                             +',MatSram0,MatSram1,VecSram0,VecSram1,VecRegs0,VecRegs1,SumSram,ResVSram,ResMSram,'
-                             +row[2]+','+row[1]+','+row[3]+','+row[5]+','+row[7]+','+row[9]+');\n')
+                Co_pad=int(row[2])
+                if(int(row[2])%32!=0):
+                    Co_pad = int(int(int(row[2])/32)+1)*32
+                lines.append('smvar_conv_code_nCi(ddr,'
+                             + str(self.input_feature_addr_list[i - 1][0]) + ',' + str(
+                    self.output_feature_addr_list[i - 1]) + ',' + str(self.weight_addr_list[conv_layer_index])
+                             + ',MatSram0,MatSram1,VecSram0,VecSram1,VecRegs0,VecRegs1,SumSram,ResVSram,ResMSram,vecReg,matReg,res_bus,sum,'
+                             + str(Co_pad)+ ',' + row[1] + ',' + row[3] + ',' + row[5] + ',' + row[7] + ',' + row[
+                                 9] + ',' + row[8]+',isa_idx,isa_ddr);\n')
 
-                lines.append('smvar_bias_sim(ddr,'+str(self.output_feature_addr_list[i-1])+','+str(self.bias_addr_list[conv_layer_index])+','
-                             +row[2]+','+row[4]+','+row[6]+');\n')
-                conv_layer_index+=1
-            elif (row[0].strip()[0:3]=='act'):
+                lines.append('smvar_bias_sim(ddr,' + str(self.output_feature_addr_list[i - 1]) + ',' + str(
+                    self.bias_addr_list[conv_layer_index]) + ','
+                             + str(Co_pad) + ',' + row[4] + ',' + row[6] + ');\n')
+                conv_layer_index += 1
+            elif (row[0].strip()[0:3] == 'act'):
                 lines.append('smvar_act_code(ddr,'
-                             +str(self.input_feature_addr_list[i-1][0])+','+row[1]+','+row[3]+','+row[5]+');\n')
+                             + str(self.input_feature_addr_list[i - 1][0]) + ',' + row[1] + ',' + row[3] + ',' + row[
+                                 5] + ');\n')
             elif (row[0].strip()[0:3] == 'add'):
                 lines.append('smvar_add_code(ddr,'
-                             +str(self.input_feature_addr_list[i-1][0])+','+str(self.input_feature_addr_list[i-1][1])+','+str(self.output_feature_addr_list[i-1])
-                             +','+row[1]+','+row[3]+','+row[5]+');\n')
+                             + str(self.input_feature_addr_list[i - 1][0]) + ',' + str(
+                    self.input_feature_addr_list[i - 1][1]) + ',' + str(self.output_feature_addr_list[i - 1])
+                             + ',' + row[1] + ',' + row[3] + ',' + row[5] + ');\n')
             elif (row[0].strip()[0:10] == 'upsampling'):
                 lines.append('smvar_upsample_code(ddr,'
-                             +str(self.input_feature_addr_list[i-1][0])+','+str(self.output_feature_addr_list[i-1])
-                             +','+row[1]+','+row[3]+','+row[5]+');\n')
+                             + str(self.input_feature_addr_list[i - 1][0]) + ',' + str(
+                    self.output_feature_addr_list[i - 1])
+                             + ',' + row[1] + ',' + row[3] + ',' + row[5] + ');\n')
             elif (row[0].strip()[0:7] == 'maxpool'):
                 lines.append('smvar_maxpool_code(ddr,'
-                             +str(self.input_feature_addr_list[i-1][0])+','+str(self.output_feature_addr_list[i-1])
-                             +','+row[1]+','+row[3]+','+row[5]+','+row[7]+','+row[8]+');\n')
+                             + str(self.input_feature_addr_list[i - 1][0]) + ',' + str(
+                    self.output_feature_addr_list[i - 1])
+                             + ',' + row[1] + ',' + row[3] + ',' + row[5] + ',' + row[7] + ',' + row[8] + ');\n')
             elif (row[0].strip()[0:5] == 'slice'):
                 lines.append('smvar_slice_code(ddr,'
-                             +str(self.input_feature_addr_list[i-1][0])+','+str(self.output_feature_addr_list[i-1])
-                             +','+row[1]+','+row[3]+','+row[5]+');\n')
+                             + str(self.input_feature_addr_list[i - 1][0]) + ',' + str(
+                    self.output_feature_addr_list[i - 1])
+                             + ',' + row[1] + ',' + row[3] + ',' + row[5] + ');\n')
             elif (row[0].strip()[0:3] == 'cat'):
                 if (row[0].strip().find('-') != -1):
                     lines.append('smvar_cat4_code(ddr,'
-                             +str(self.input_feature_addr_list[i-1][0])+','+str(self.input_feature_addr_list[i-1][1])
-                        +','+str(self.input_feature_addr_list[i-1][2])+','+str(self.input_feature_addr_list[i-1][3])+','+str(self.output_feature_addr_list[i-1])
-                             +','+row[1]+','+row[3]+','+row[5]+');\n')
+                                 + str(self.input_feature_addr_list[i - 1][0]) + ',' + str(
+                        self.input_feature_addr_list[i - 1][1])
+                                 + ',' + str(self.input_feature_addr_list[i - 1][2]) + ',' + str(
+                        self.input_feature_addr_list[i - 1][3]) + ',' + str(self.output_feature_addr_list[i - 1])
+                                 + ',' + row[1] + ',' + row[3] + ',' + row[5] + ');\n')
                 else:
                     lines.append('smvar_cat_code(ddr,'
-                             +str(self.input_feature_addr_list[i-1][0])+','+str(self.input_feature_addr_list[i-1][1])+','+str(self.output_feature_addr_list[i-1])
-                             +','+row[1]+','+row[3]+','+row[5]+');\n')
-        file = open('yolov5s.cpp', 'w')
+                                 + str(self.input_feature_addr_list[i - 1][0]) + ',' + str(
+                        self.input_feature_addr_list[i - 1][1]) + ',' + str(self.output_feature_addr_list[i - 1])
+                                 + ',' + row[1] + ',' + row[3] + ',' + row[5] + ');\n')
+        file = open(self.cpp_filename, 'w')
         file.writelines(lines)
         file.close()
         # for i in range(len(self.input_feature_addr_list)):
         #     print(self.input_feature_addr_list[i],self.output_feature_addr_list[i])
+
     def addr_compute(self):
         self.read_csv()
         self.count_layers_output_resue()
@@ -479,7 +527,5 @@ class compiler_backend():
         self.generate_code()
 
 
-
-
-c=compiler_backend()
+c = compiler_backend()
 c.addr_compute()
