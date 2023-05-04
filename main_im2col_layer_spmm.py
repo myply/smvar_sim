@@ -460,21 +460,30 @@ class compiler_backend():
                 Co_pad=int(row[2])
                 if(int(row[2])%32!=0):
                     Co_pad = int(int(int(row[2])/32)+1)*32
-                lines.append('smvar_conv_code_nCi(ddr,'
-                             + str(self.input_feature_addr_list[i - 1][0]) + ',' + str(
-                    self.output_feature_addr_list[i - 1]) + ',' + str(self.weight_addr_list[conv_layer_index])
-                             + ',MatSram0,MatSram1,VecSram0,VecSram1,VecRegs0,VecRegs1,SumSram,ResVSram,ResMSram,vecReg,matReg,res_bus,sum,'
-                             + str(Co_pad)+ ',' + row[1] + ',' + row[3] + ',' + row[5] + ',' + row[7] + ',' + row[
-                                 9] + ',' + row[8]+',isa_idx,isa_ddr);\n')
+                if(conv_layer_index<59):
+                    lines.append('smvar_conv_code_nCi(ddr,'
+                                 + str(self.input_feature_addr_list[i - 1][0]) + ',' + str(
+                        self.output_feature_addr_list[i - 1]) + ',' + str(self.weight_addr_list[conv_layer_index])+ ',' + str(self.bias_addr_list[conv_layer_index])
+                                 + ',MatSram0,MatSram1,VecSram0,VecSram1,VecRegs0,VecRegs1,SumSram,ResVSram,ResMSram,vecReg,matReg,res_bus,sum,biasSram,'
+                                 + str(Co_pad)+ ',' + row[1] + ',' + row[3] + ',' + row[5] + ',' + row[7] + ',' + row[
+                                     9] + ',' + row[8]+',1'+',4'+',isa_idx,isa_ddr);\n')
+                else:
+                    lines.append('smvar_conv_code_nCi(ddr,'
+                                 + str(self.input_feature_addr_list[i - 1][0]) + ',' + str(
+                        self.output_feature_addr_list[i - 1]) + ',' + str(self.weight_addr_list[conv_layer_index])+ ',' + str(self.bias_addr_list[conv_layer_index])
+                                 + ',MatSram0,MatSram1,VecSram0,VecSram1,VecRegs0,VecRegs1,SumSram,ResVSram,ResMSram,vecReg,matReg,res_bus,sum,biasSram,'
+                                 + str(Co_pad)+ ',' + row[1] + ',' + row[3] + ',' + row[5] + ',' + row[7] + ',' + row[
+                                     9] + ',' + row[8]+',1'+',0'+',isa_idx,isa_ddr);\n')
 
-                lines.append('smvar_bias_sim(ddr,' + str(self.output_feature_addr_list[i - 1]) + ',' + str(
-                    self.bias_addr_list[conv_layer_index]) + ','
-                             + str(Co_pad) + ',' + row[4] + ',' + row[6] + ');\n')
+                # lines.append('smvar_bias_sim(ddr,' + str(self.output_feature_addr_list[i - 1]) + ',' + str(
+                #     self.bias_addr_list[conv_layer_index]) + ','
+                #              + str(Co_pad) + ',' + row[4] + ',' + row[6] + ');\n')
                 conv_layer_index += 1
             elif (row[0].strip()[0:3] == 'act'):
-                lines.append('smvar_act_code(ddr,'
-                             + str(self.input_feature_addr_list[i - 1][0]) + ',' + row[1] + ',' + row[3] + ',' + row[
-                                 5] + ');\n')
+                continue
+                # lines.append('smvar_act_code(ddr,'
+                #              + str(self.input_feature_addr_list[i - 1][0]) + ',' + row[1] + ',' + row[3] + ',' + row[
+                #                  5] + ');\n')
             elif (row[0].strip()[0:3] == 'add'):
                 lines.append('smvar_add_code(ddr,'
                              + str(self.input_feature_addr_list[i - 1][0]) + ',' + str(
