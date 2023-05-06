@@ -141,8 +141,11 @@ class compiler_backend():
                 Co_pad=int(row[2])
                 if(int(row[2])%32!=0):
                     Co_pad = int(int(int(row[2])/32)+1)*32
+                Ci_pad=int(row[1])
+                if(int(row[1])%32!=0):
+                    Ci_pad = int(int(int(row[1])/32)+1)*32
                 # print(row, int(row[1]) * int(row[2]) * int(row[7]) * int(row[7]),count, temp_addr)
-                temp_addr = temp_addr + int(row[1]) * Co_pad* int(row[7]) * int(row[7])
+                temp_addr = temp_addr + Ci_pad * Co_pad* int(row[7]) * int(row[7])
                 count += 1
         self.bias_segment_start_addr = temp_addr
 
@@ -434,7 +437,7 @@ class compiler_backend():
         print(len(self.input_feature_addr_list))
         print(len(self.output_feature_addr_list))
         print(len(self.weight_addr_list))
-        lines.append('store_fea_from_csv_2_ddr(ddr,' + self.csv_file_path + 'input\\\\input.csv",' +
+        lines.append('store_fea_from_csv_2_ddr(ddr,' + self.csv_file_path + 'input\\\\input0.csv",' +
                      self.data[1][1] + ',' + self.data[1][3] + ',' + self.data[1][5] + ',' + str(
             self.input_feature_addr_list[0][0]) + ');\n')
 
@@ -446,11 +449,11 @@ class compiler_backend():
                 if(int(row[2])%32!=0):
                     Co_pad = int(int(int(row[2])/32)+1)*32
                 lines.append('store_weight_from_csv_2_ddr(ddr,' + self.csv_file_path + 'weight\\\\weight'
-                             + str(conv_layer_index) + '.csv",' + str(Co_pad) + ',' + row[1] + ',' + row[7] + ',' + str(
+                             + str(conv_layer_index) + '.csv",' + row[2] + ',' + row[1] + ',' + row[7] + ',' + str(
                     self.weight_addr_list[conv_layer_index]) + ');\n')
 
                 lines.append('store_bias_from_csv_2_ddr(ddr,' + self.csv_file_path + 'bias\\\\bias'
-                             + str(conv_layer_index) + '.csv",' + str(Co_pad) + ',' + str(
+                             + str(conv_layer_index) + '.csv",' + row[2]  + ',' + str(
                     self.bias_addr_list[conv_layer_index]) + ');\n')
                 conv_layer_index += 1
 
@@ -460,20 +463,26 @@ class compiler_backend():
                 Co_pad=int(row[2])
                 if(int(row[2])%32!=0):
                     Co_pad = int(int(int(row[2])/32)+1)*32
-                if(conv_layer_index<59):
+                Ci_pad=int(row[1])
+                if(int(row[1])%32!=0):
+                    Ci_pad = int(int(int(row[1])/32)+1)*32
+                if(conv_layer_index>=59):
                     lines.append('smvar_conv_code_nCi(ddr,'
                                  + str(self.input_feature_addr_list[i - 1][0]) + ',' + str(
-                        self.output_feature_addr_list[i - 1]) + ',' + str(self.weight_addr_list[conv_layer_index])+ ',' + str(self.bias_addr_list[conv_layer_index])
+                        self.output_feature_addr_list[i - 1]) + ',' + str(
+                        self.weight_addr_list[conv_layer_index]) + ',' + str(self.bias_addr_list[conv_layer_index])
                                  + ',MatSram0,MatSram1,VecSram0,VecSram1,VecRegs0,VecRegs1,SumSram,ResVSram,ResMSram,vecReg,matReg,res_bus,sum,biasSram,'
-                                 + str(Co_pad)+ ',' + row[1] + ',' + row[3] + ',' + row[5] + ',' + row[7] + ',' + row[
-                                     9] + ',' + row[8]+',1'+',4'+',isa_idx,isa_ddr);\n')
+                                 + str(Co_pad) + ',' + str(Ci_pad) + ',' + row[3] + ',' + row[5] + ',' + row[7] + ',' +
+                                 row[
+                                     9] + ',' + row[8] + ',1' + ',0' + ',isa_idx,isa_ddr);\n')
                 else:
                     lines.append('smvar_conv_code_nCi(ddr,'
-                                 + str(self.input_feature_addr_list[i - 1][0]) + ',' + str(
-                        self.output_feature_addr_list[i - 1]) + ',' + str(self.weight_addr_list[conv_layer_index])+ ',' + str(self.bias_addr_list[conv_layer_index])
-                                 + ',MatSram0,MatSram1,VecSram0,VecSram1,VecRegs0,VecRegs1,SumSram,ResVSram,ResMSram,vecReg,matReg,res_bus,sum,biasSram,'
-                                 + str(Co_pad)+ ',' + row[1] + ',' + row[3] + ',' + row[5] + ',' + row[7] + ',' + row[
-                                     9] + ',' + row[8]+',1'+',0'+',isa_idx,isa_ddr);\n')
+                             + str(self.input_feature_addr_list[i - 1][0]) + ',' + str(
+                    self.output_feature_addr_list[i - 1]) + ',' + str(
+                    self.weight_addr_list[conv_layer_index]) + ',' + str(self.bias_addr_list[conv_layer_index])
+                             + ',MatSram0,MatSram1,VecSram0,VecSram1,VecRegs0,VecRegs1,SumSram,ResVSram,ResMSram,vecReg,matReg,res_bus,sum,biasSram,'
+                             + str(Co_pad) + ',' + str(Ci_pad) + ',' + row[3] + ',' + row[5] + ',' + row[7] + ',' + row[
+                                 9] + ',' + row[8] + ',1' + ',4' + ',isa_idx,isa_ddr);\n')
 
                 # lines.append('smvar_bias_sim(ddr,' + str(self.output_feature_addr_list[i - 1]) + ',' + str(
                 #     self.bias_addr_list[conv_layer_index]) + ','
